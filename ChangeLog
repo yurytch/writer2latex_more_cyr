@@ -1,0 +1,10 @@
+= 2023-01-18 =
+Only the patchset, made from the snapshot of forked code in its state which was actually used for conversion of several large-ish ODT texts with lots of formulas. 
+This code wouldn't produce instantly compilable LaTeX source, but it wouldn't throw out Cyrillics in formulas and bibliography entries' names, either.
+Proved compilation and work with JDK 1.8.0_271.
+**Known not-processed elements:**
+1) Superscripted all-numbers sequences like 11400.
+2) User-created StarMath dictionary entries.
+3) All kinds of counters if those have Cyrillics in names (figures, formulas, etc.)
+I didn't work on it for more than a year and might forget something.
+Patchset needs to be applied from `source` subdirectory.
