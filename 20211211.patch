@@ -1,0 +1,272 @@
+--- java/writer2latex/util/ExportNameCollection.java.prev	2018-03-06 23:06:00.000000000 +0300
++++ java/writer2latex/util/ExportNameCollection.java	2021-12-11 10:15:49.061268638 +0300
+@@ -54,7 +54,7 @@
+     public Enumeration<String> keys() {
+         return exportNames.keys();
+     }
+-    
++
+     public void addName(String sName){
+         if (containsName(sName)) { return; }
+         StringBuilder outbuf=new StringBuilder();
+@@ -90,7 +90,71 @@
+         String sExportName=outbuf.toString();
+         if (sExportName.length()==0) {
+         	// Do not accept empty export names
+-        	sExportName = "qwerty";
++        	sExportName = "empty_export_name";
++        }
++        if (!exportNames.containsValue(sExportName)) {
++        	// Everything's fine, we can use the stripped name directly
++        	exportNames.put(sName,sExportName);
++        }
++        else {
++        	// Otherwise add letters at the end until a unique export name is found
++        	int i=1;
++        	while (true) {
++        		String sSuffix = Misc.int2alph(i++, false);
++        		if (!exportNames.containsValue(sExportName+sSuffix)) {
++        			exportNames.put(sName,sExportName+sSuffix);
++        			break;
++        		}
++        	}
++        }
++    }
++    
++    public void addName_2(String sName){
++        if (containsName(sName)) { return; }
++        StringBuilder outbuf=new StringBuilder();
++        SimpleInputBuffer inbuf=new SimpleInputBuffer(sName);
++		
++        // Don't start with a digit
++        if (bAcceptNumbers && inbuf.peekChar()>='0' && inbuf.peekChar()<='9') {
++            outbuf.append('a');
++        }
++
++        char c;
++        // convert numbers to roman numbers and discard unwanted characters
++        while ((c=inbuf.peekChar())!='\0'){
++            if ((c>='a' && c<='z') || (c>='A' && c<='Z')) {
++                outbuf.append(inbuf.getChar());
++            }
++            else if (c>='0' && c<='9'){
++                if (bAcceptNumbers) {
++                    outbuf.append(inbuf.getInteger());
++                }
++                else {
++                    outbuf.append(Misc.int2roman(
++                                  Integer.parseInt(inbuf.getInteger())));
++                }
++            }
++            else if ( c == ' ' ) 
++            {
++              inbuf.getChar();
++              outbuf.append( '_' );
++            }
++            else if ( c == '\'' ) 
++            {
++              inbuf.getChar();
++            }
++//yurytch: superceded by allowing everything
++//           else if (sAdditionalChars.indexOf(c)>-1) {
++//            	outbuf.append(inbuf.getChar());
++//            }
++            else {
++                outbuf.append(inbuf.getChar()); // ignore this character // yurytch: or maybe not
++            }
++        }
++        String sExportName=outbuf.toString();
++        if (sExportName.length()==0) {
++        	// Do not accept empty export names
++        	sExportName = "empty_export_name";
+         }
+         if (!exportNames.containsValue(sExportName)) {
+         	// Everything's fine, we can use the stripped name directly
+@@ -115,6 +179,12 @@
+         return sPrefix + exportNames.get(sName);
+     }
+ 
++    public String getExportName_2(String sName) {
++        // add the name, if it does not exist
++        if (!containsName(sName)) { addName_2(sName); }
++        return sPrefix + exportNames.get(sName);
++    }
++
+     public boolean containsName(String sName) {
+         return exportNames.containsKey(sName);
+     }
+--- java/writer2latex/bibtex/BibTeXDocument.java.prev	2018-04-11 21:17:00.000000000 +0300
++++ java/writer2latex/bibtex/BibTeXDocument.java	2021-12-11 10:31:16.573249219 +0300
+@@ -76,7 +76,7 @@
+     	for (Element bibMark : bibMarks) {
+     		BibMark entry = new BibMark(bibMark);
+             entries.put(entry.getIdentifier(),entry);
+-            exportNames.addName(entry.getIdentifier());    		
++            exportNames.addName_2(entry.getIdentifier());    		
+     	}
+     }
+     
+@@ -98,6 +98,10 @@
+     public String getExportName(String sIdentifier) {
+         return exportNames.getExportName(sIdentifier);
+     }
++
++    public String getExportName_2(String sIdentifier) {
++        return exportNames.getExportName_2(sIdentifier);
++    }
+     
+     /** Returns the document name without file extension
+      *
+@@ -127,7 +131,8 @@
+ 
+     public void write(OutputStream os) throws IOException {
+         // BibTeX files are plain ascii
+-        OutputStreamWriter osw = new OutputStreamWriter(os,"ASCII");
++        // yurytch: let's have utf-8 there, though
++        OutputStreamWriter osw = new OutputStreamWriter(os,"UTF-8");
+         osw.write("%% This file was converted to BibTeX by Writer2LaTeX ver. "+ConverterFactory.getVersion()+".\n");
+         osw.write("%% See http://writer2latex.sourceforge.net for more info.\n");
+         osw.write("\n");
+@@ -149,12 +154,14 @@
+                     osw.write("    ");
+                     osw.write(BibTeXEntryMap.getFieldName(entryType).toUpperCase());
+                     osw.write(" = {");
+-                    for (int j=0; j<sValue.length(); j++) {
+-                        String s = i18n.convert(Character.toString(sValue.charAt(j)),false,"en");
+-                        if (s.charAt(0)=='\\') { osw.write("{"); }
+-                        osw.write(s);
+-                        if (s.charAt(0)=='\\') { osw.write("}"); }
+-                    }
++//yurytch: !!! some kind of check?
++//		for (int j=0; j<sValue.length(); j++) {
++//			String s = i18n.convert(Character.toString(sValue.charAt(j)),false,"en");
++//			if (s.charAt(0)=='\\') { osw.write("{"); }
++//			  osw.write(s);
++//                      if (s.charAt(0)=='\\') { osw.write("}"); }
++//		}
++                    osw.write( sValue );
+                     osw.write("},\n");
+                 }
+             }
+--- java/writer2latex/latex/i18n/XeTeXI18n.java.prev	2018-09-15 12:17:00.000000000 +0300
++++ java/writer2latex/latex/i18n/XeTeXI18n.java	2021-12-11 10:03:34.694649236 +0300
+@@ -76,7 +76,7 @@
+     // Data for western text conversion 
+ 	private String sCTLCommand = null;
+ 	private String sCTLLanguage = null;
+-	private boolean bNeedCJK = true;
++	private boolean bNeedCJK = false;
+ 
+ 
+     /** Construct a new XeTeXI18n as ConverterHelper
+@@ -197,6 +197,11 @@
+     		switch (nScript) {
+ 			case LaTeXConfig.WESTERN:
+ 	    		useDefaultFont("\\setmainfont",XMLString.STYLE_FONT_NAME,decl);
++	    		// yurytch: !!! have to set a condition on this
++				String sFont = getDefaultFontFamily(XMLString.STYLE_FONT_NAME);
++				if (sFont!=null) {
++					decl.append("\\newfontfamily\\cyrillicfont{"+sFont+"}[Script=Cyrillic]").nl();
++				}
+ 	    		if (sCTLLanguage!=null && !sCTLLanguage.isEmpty()) {
+ 	    			useDefaultFont("\\newfontfamily\\"+sCTLLanguage+"font[Scale=MatchUppercase]",XMLString.STYLE_FONT_NAME_COMPLEX,decl);
+ 	    		}
+--- java/writer2latex/latex/BibConverter.java.prev	2018-09-09 14:18:00.000000000 +0300
++++ java/writer2latex/latex/BibConverter.java	2021-12-11 10:29:49.868233748 +0300
+@@ -251,7 +251,7 @@
+         if (sIdentifier!=null) {
+             // Use original citation if using external files; stripped if exporting BibTeX
+             ldp.append("\\cite{")
+-               .append(config.externalBibtexFiles().length()==0 ? bibDoc.getExportName(sIdentifier) : sIdentifier)
++               .append(config.externalBibtexFiles().length()==0 ? bibDoc.getExportName_2(sIdentifier) : sIdentifier)
+                .append("}");
+         }
+     }
+--- java/org/openoffice/da/comp/writer2latex/bibtex/BibTeXDialog.java.prev	2018-08-17 11:38:00.000000000 +0300
++++ java/org/openoffice/da/comp/writer2latex/bibtex/BibTeXDialog.java	2021-12-11 10:26:54.946241006 +0300
+@@ -476,6 +476,7 @@
+ 			while (enumeration.hasMoreElements()) {
+ 				try {
+ 					Object elm = enumeration.nextElement();
++					try {
+ 					if (AnyConverter.isObject(elm)) {
+ 						XTextField xTextField = (XTextField) AnyConverter.toObject(XTextField.class, elm);
+ 						if (xTextField!=null) {
+@@ -488,6 +489,7 @@
+ 							}
+ 						}
+ 					}
++					} catch( com.sun.star.lang.IllegalArgumentException eee ) { /* compiler be happy*/ } 
+ 				} catch (NoSuchElementException e) {
+ 				} catch (WrappedTargetException e) {
+ 				}
+@@ -502,6 +504,7 @@
+ 			for (int i=0; i<nIndexCount; i++) {
+ 				try {
+ 					Object indexElm = xIndexAccess.getByIndex(i);
++					try {
+ 					if (AnyConverter.isObject(indexElm)) {
+ 						XDocumentIndex xDocumentIndex = (XDocumentIndex) AnyConverter.toObject(XDocumentIndex.class, indexElm);
+ 						if (xDocumentIndex!=null) {
+@@ -510,6 +513,7 @@
+ 							}
+ 						}
+ 					}
++					} catch( com.sun.star.lang.IllegalArgumentException eee ) { /* compiler be happy*/ } 
+ 				} catch (IndexOutOfBoundsException e) {
+ 				} catch (WrappedTargetException e) {
+ 				}
+--- java/org/openoffice/da/comp/writer2latex/latex/LaTeXUNOPublisher.java.prev	2018-08-17 11:38:00.000000000 +0300
++++ java/org/openoffice/da/comp/writer2latex/latex/LaTeXUNOPublisher.java	2021-12-09 21:43:38.781355162 +0300
+@@ -118,12 +118,14 @@
+             }
+             else { // The backend is not set directly in the filter data, try to get from configuration
+ 	            Object cfg = filterHelper.get("ConfigURL");
++	            try {
+ 	            if (cfg!=null && AnyConverter.isString(cfg)) {
+ 	            	Config config = ConverterFactory.createConfig(MIMETypes.LATEX);
+ 	            	ConverterHelper converterHelper = new ConverterHelper(xContext);
+ 	                converterHelper.readConfig(AnyConverter.toString(cfg),config);
+ 	                sBackend = config.getOption("backend");
+ 	            }
++		    } catch( com.sun.star.lang.IllegalArgumentException eee ) { /* compiler be happy*/ }
+             }
+             
+             // Set the bibliography options according to the settings
+--- java/org/openoffice/da/comp/writer2latex/base/FilterDataParser.java.prev	2018-04-17 11:27:00.000000000 +0300
++++ java/org/openoffice/da/comp/writer2latex/base/FilterDataParser.java	2021-12-09 21:36:48.160340542 +0300
+@@ -53,6 +53,7 @@
+      * @param converter a <code>writer2latex.api.Converter</code> implementation
+      */
+     public void applyFilterOptions(Object options, Converter converter) {
++     try {
+     	// Get the string from the data, if possible
+     	if (AnyConverter.isString(options)) {
+     		String sOptions = AnyConverter.toString(options);
+@@ -70,6 +71,7 @@
+ 	        	applyParsedFilterData(filterData,converter);
+     		}
+     	}
++      } catch( com.sun.star.lang.IllegalArgumentException eee ) {}
+     }
+     
+     /** Apply the given FilterData property to the given converter.
+@@ -102,14 +104,17 @@
+         // Get the special properties TemplateURL and ConfigURL
+         ConverterHelper converterHelper = new ConverterHelper(xComponentContext);
+         Object tpl = props.get("TemplateURL");
++      try {
+         if (tpl!=null && AnyConverter.isString(tpl)) {
+         	converterHelper.readTemplate(AnyConverter.toString(tpl), converter);
+         }
+-        
++
+         Object cfg = props.get("ConfigURL");
+         if (cfg!=null && AnyConverter.isString(cfg)) {
+             converterHelper.readConfig(AnyConverter.toString(cfg), converter.getConfig());
+         }
++      } catch( com.sun.star.lang.IllegalArgumentException eee ) {}
++        
+         
+         // Read further configuration properties
+         Enumeration<String> keys = props.keys();
